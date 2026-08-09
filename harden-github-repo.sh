@@ -55,16 +55,17 @@ RULESETS_DIR="$SCRIPT_DIR/gh-rulesets"
 CODEOWNERS_TEMPLATE="$SCRIPT_DIR/CODEOWNERS.template"
 REPO_SETTINGS_DIR="$SCRIPT_DIR/gh-repo-settings"
 DEPENDABOT_TEMPLATE="$SCRIPT_DIR/dependabot.template.yml"
+CODEOWNER=""
 
 usage() {
-  sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'
+  awk '/^#!/{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
   exit 1
 }
 
 REPOS=()
 REPO_FILE=""
 
-while getopts "r:f:d:c:s:b:h" opt; do
+while getopts "r:f:d:c:s:b:u:h" opt; do
   case "$opt" in
     r) REPOS+=("$OPTARG") ;;
     f) REPO_FILE="$OPTARG" ;;
@@ -72,6 +73,7 @@ while getopts "r:f:d:c:s:b:h" opt; do
     c) CODEOWNERS_TEMPLATE="$OPTARG" ;;
     s) REPO_SETTINGS_DIR="$OPTARG" ;;
     b) DEPENDABOT_TEMPLATE="$OPTARG" ;;
+    u) CODEOWNER="$OPTARG" ;;
     h) usage ;;
     *) usage ;;
   esac
@@ -150,6 +152,19 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
+# Auto-detect the codeowner username from the authenticated gh user, unless
+# -u was given, and only if there's a CODEOWNERS template to actually use.
+if [ -z "$CODEOWNER" ] && [ -f "$CODEOWNERS_TEMPLATE" ]; then
+  CODEOWNER=$(gh api user --jq .login 2>/dev/null || true)
+  if [ -z "$CODEOWNER" ]; then
+    echo "Error: could not auto-detect GitHub username (gh auth login may be needed)." >&2
+    echo "Pass one explicitly with -u your-username or -u your-org/your-team" >&2
+    exit 1
+  fi
+  echo "Auto-detected CODEOWNER: @$CODEOWNER (override with -u)"
+  echo ""
+fi
+
 if [ ! -d "$RULESETS_DIR" ]; then
   echo "Error: rulesets directory not found: $RULESETS_DIR" >&2
   exit 1
@@ -205,13 +220,13 @@ apply_ruleset() {
 }
 
 # Pushes CODEOWNERS_TEMPLATE to .github/CODEOWNERS via a branch + pull request
-# (not a direct commit), direct commits are blocked by the pull_request rule
+# (not a direct commit) — direct commits are blocked by the pull_request rule
 # in gh-rulesets once it's applied, so this respects that instead of fighting it.
 # Skips entirely if the default branch's CODEOWNERS already matches the template.
 apply_codeowners() {
   local repo="$1"
   local default_branch base_sha work_branch="harden-repo-codeowners"
-  local existing_content new_encoded existing_sha pr_number owner
+  local existing_content new_encoded existing_sha pr_number owner rendered
 
   default_branch=$(gh api "/repos/$repo" --jq .default_branch 2>/dev/null || true)
   if [ -z "$default_branch" ]; then
@@ -219,7 +234,17 @@ apply_codeowners() {
     return 1
   fi
 
-  new_encoded=$(base64 -w 0 < "$CODEOWNERS_TEMPLATE" 2>/dev/null || base64 < "$CODEOWNERS_TEMPLATE")
+  if ! rendered=$(sed "s/{{CODEOWNER}}/$CODEOWNER/g" "$CODEOWNERS_TEMPLATE"); then
+    echo "   ! Could not read/render $CODEOWNERS_TEMPLATE, skipping CODEOWNERS for $repo"
+    return 1
+  fi
+  if [ -z "$rendered" ]; then
+    echo "   ! Rendered CODEOWNERS content is empty (check $CODEOWNERS_TEMPLATE exists and has content) — skipping for $repo"
+    return 1
+  fi
+
+  new_encoded=$(printf '%s\n' "$rendered" | base64 -w 0 2>/dev/null \
+    || printf '%s\n' "$rendered" | base64 | tr -d '\n')
 
   existing_content=$(gh api "/repos/$repo/contents/.github/CODEOWNERS?ref=$default_branch" \
     --jq .content 2>/dev/null | tr -d '\n' || true)
@@ -279,7 +304,7 @@ if [ -f "$CODEOWNERS_TEMPLATE" ]; then
   echo "CODEOWNERS template: $CODEOWNERS_TEMPLATE"
   echo ""
 else
-  echo "No CODEOWNERS template found at $CODEOWNERS_TEMPLATE , skipping CODEOWNERS step."
+  echo "No CODEOWNERS template found at $CODEOWNERS_TEMPLATE — skipping CODEOWNERS step."
   echo ""
 fi
 
@@ -287,7 +312,7 @@ fi
 # ruleset/branch-protection involved). Each file describes one call:
 #   { "name": "...", "method": "PUT|PATCH|POST", "endpoint": "/repos/{repo}/...", "body": {...} }
 # "{repo}" in the endpoint is substituted with the target repo. Failures are
-# reported but non-fatal, some settings only apply to public repos, or
+# reported but non-fatal — some settings only apply to public repos, or
 # require GHAS on private repos, and that's expected, not a bug.
 apply_repo_setting() {
   local repo="$1" file="$2"
@@ -309,7 +334,7 @@ apply_repo_setting() {
     "$endpoint" --input - > /dev/null 2>&1; then
     return 0
   else
-    echo "      (not applied, may require a paid plan, GHAS, or doesn't apply to this repo)"
+    echo "      (not applied — may require a paid plan, GHAS, or doesn't apply to this repo)"
     return 1
   fi
 }
@@ -327,7 +352,7 @@ if [ -d "$REPO_SETTINGS_DIR" ]; then
   fi
 else
   REPO_SETTING_FILES=()
-  echo "No repo-settings directory found at $REPO_SETTINGS_DIR , skipping that step."
+  echo "No repo-settings directory found at $REPO_SETTINGS_DIR — skipping that step."
   echo ""
 fi
 
@@ -345,7 +370,13 @@ apply_dependabot_config() {
     return 1
   fi
 
-  new_encoded=$(base64 -w 0 < "$DEPENDABOT_TEMPLATE" 2>/dev/null || base64 < "$DEPENDABOT_TEMPLATE")
+  if [ ! -s "$DEPENDABOT_TEMPLATE" ]; then
+    echo "   ! $DEPENDABOT_TEMPLATE is missing or empty, skipping dependabot.yml for $repo"
+    return 1
+  fi
+
+  new_encoded=$(base64 -w 0 < "$DEPENDABOT_TEMPLATE" 2>/dev/null \
+    || base64 < "$DEPENDABOT_TEMPLATE" | tr -d '\n')
 
   existing_content=$(gh api "/repos/$repo/contents/.github/dependabot.yml?ref=$default_branch" \
     --jq .content 2>/dev/null | tr -d '\n' || true)
@@ -405,7 +436,7 @@ if [ -f "$DEPENDABOT_TEMPLATE" ]; then
   echo "Dependabot template: $DEPENDABOT_TEMPLATE"
   echo ""
 else
-  echo "No dependabot template found at $DEPENDABOT_TEMPLATE , skipping that step."
+  echo "No dependabot template found at $DEPENDABOT_TEMPLATE — skipping that step."
   echo ""
 fi
 
