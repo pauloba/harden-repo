@@ -1,0 +1,9 @@
+{
+  "name": "Restrict Actions to GitHub/verified creators",
+  "method": "PUT",
+  "endpoint": "/repos/{repo}/actions/permissions",
+  "body": {
+    "enabled": true,
+    "allowed_actions": "selected"
+  }
+}

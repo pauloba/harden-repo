@@ -1,0 +1,6 @@
+{
+  "name": "Enable Dependabot vulnerability alerts",
+  "method": "PUT",
+  "endpoint": "/repos/{repo}/vulnerability-alerts",
+  "body": {}
+}
