@@ -1,0 +1,14 @@
+# CODEOWNERS template — pushed to .github/CODEOWNERS on each repo by
+# harden-github-repo.sh (or via -c to point at a different file).
+#
+# The codeowner placeholder below is substituted automatically at run time:
+# it defaults to your authenticated `gh` username, or pass -u your-username
+# (or -u your-org/your-team) to override. No manual editing required.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+.github/workflows/*  @{{CODEOWNER}}
+.github/actions/*    @{{CODEOWNER}}
+Dockerfile           @{{CODEOWNER}}
+package.json         @{{CODEOWNER}}
+requirements.txt     @{{CODEOWNER}}
