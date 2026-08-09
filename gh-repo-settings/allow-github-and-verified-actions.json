@@ -1,0 +1,10 @@
+{
+  "name": "Allow GitHub-owned and Marketplace-verified Actions",
+  "method": "PUT",
+  "endpoint": "/repos/{repo}/actions/permissions/selected-actions",
+  "body": {
+    "github_owned_allowed": true,
+    "verified_allowed": true,
+    "patterns_allowed": []
+  }
+}

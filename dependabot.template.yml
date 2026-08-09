@@ -1,0 +1,23 @@
+# Pushed to .github/dependabot.yml by harden-github-repo.sh.
+#
+# Keeping GitHub Actions versions patched is the free-tier equivalent of
+# SHA-pinning maintenance: Dependabot opens a PR whenever an action you use
+# gets a new release, so you're not stuck on an old (possibly compromised)
+# tag indefinitely. Uncomment/add other ecosystems below if this repo uses them.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"

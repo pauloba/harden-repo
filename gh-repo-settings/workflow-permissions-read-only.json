@@ -1,0 +1,9 @@
+{
+  "name": "Default GITHUB_TOKEN to read-only",
+  "method": "PUT",
+  "endpoint": "/repos/{repo}/actions/permissions/workflow",
+  "body": {
+    "default_workflow_permissions": "read",
+    "can_approve_pull_request_reviews": false
+  }
+}

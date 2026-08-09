@@ -1,0 +1,6 @@
+{
+  "name": "Enable Dependabot automated security updates",
+  "method": "PUT",
+  "endpoint": "/repos/{repo}/automated-security-fixes",
+  "body": {}
+}
