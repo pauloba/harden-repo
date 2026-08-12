@@ -18,7 +18,7 @@ and why.
 - PR required, no force-push, linear history
   - protect-default-branch-ruleset.json
 - Tags can't be deleted or overwritten  
- - protect-tags-ruleset.json             
+  - protect-tags-ruleset.json             
 - Simple repo-level API toggles
   - gh-repo-settings/
 - GITHUB_TOKEN defaults to read-only
